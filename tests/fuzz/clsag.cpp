@@ -30,7 +30,6 @@
 #include <boost/archive/portable_binary_oarchive.hpp>
 
 #include "include_base_utils.h"
-#include "file_io_utils.h"
 #include "cryptonote_basic/blobdatatype.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
@@ -43,96 +42,15 @@
 using namespace crypto;
 using namespace rct;
 
-class CLSAGFuzzer: public Fuzzer
-{
-public:
-  CLSAGFuzzer(): Fuzzer() {}
-  virtual int init();
-  virtual int run(const std::string &filename);
-  int generate_seed_corpus(const std::string& path);
-  int fuzz_message(const std::string&);
-  int fuzz_cout(const std::string&);
-  int fuzz_clsag(const std::string&);
-  int fuzz_clsag_deserialize(const std::string&);
+static key message;
+static ctkeyV pubs;
+static key p, t, t2, u;
+static ctkey backup;
+static key Cout;
+static ctkey insk;
+static clsag clsag_s;
 
-private:
-    key message;
-    ctkeyV pubs;
-    key p, t, t2, u;
-    ctkey backup;
-    key Cout;
-    ctkey insk;
-    clsag clsag_s;
-};
-
-int CLSAGFuzzer::generate_seed_corpus(const std::string& path)
-{
-  try
-  {
-    std::cout << "Generating corpus seed: " << path << std::endl;
-    std::string clsag_out;
-    serialization::dump_binary(clsag_s, clsag_out);
-    std::string corpus_path(path);
-
-    // write valid CLSAG
-    epee::file_io_utils::save_string_to_file(corpus_path, clsag_out);
-  }
-  catch (const std::exception &e)
-  {
-    std::cerr << "Error on CLSAGFuzzer::generate_seed_corpus: " << e.what() << std::endl;
-    return 1;
-  }
-
-  return 0;
-}
-
-int CLSAGFuzzer::init()
-{
-  try
-  {
-    message = identity();
-
-    const size_t N = 11;
-    const size_t idx = 5;
-
-    for (size_t i = 0; i < N; ++i)
-    {
-      key sk;
-      ctkey tmp;
-
-      skpkGen(sk, tmp.dest);
-      skpkGen(sk, tmp.mask);
-
-      pubs.push_back(tmp);
-    }
-
-    // Set P[idx]
-    skpkGen(p, pubs[idx].dest);
-
-    // Set C[idx]
-    t = skGen();
-    u = skGen();
-    addKeys2(pubs[idx].mask,t,u,H);
-
-    // Set commitment offset
-    t2 = skGen();
-    addKeys2(Cout,t2,u,H);
-
-    // Prepare generation inputs
-    insk.dest = p;
-    insk.mask = t;
-
-    clsag_s = rct::proveRctCLSAGSimple(zero(),pubs,insk,t2,Cout,NULL,NULL,NULL,idx,hw::get_device("default"));
-  }
-  catch (const std::exception &e)
-  {
-    std::cerr << "Error on CLSAGFuzzer::init: " << e.what() << std::endl;
-    return 1;
-  }
-  return 0;
-}
-
-int CLSAGFuzzer::fuzz_message(const std::string& s)
+static int fuzz_message(const std::string& s)
 {
   // fuzz message
   memcpy(&message, (uint8_t*)s.c_str(), sizeof(message));
@@ -141,7 +59,7 @@ int CLSAGFuzzer::fuzz_message(const std::string& s)
   return 0;
 }
 
-int CLSAGFuzzer::fuzz_cout(const std::string& s)
+static int fuzz_cout(const std::string& s)
 {
   // fuzz Cout
   memcpy(&Cout, (uint8_t*)s.c_str(), sizeof(Cout));
@@ -150,7 +68,7 @@ int CLSAGFuzzer::fuzz_cout(const std::string& s)
   return 0;
 }
 
-int CLSAGFuzzer::fuzz_clsag(const std::string& s)
+static int fuzz_clsag(const std::string& s)
 {
   // fuzz clsag
   size_t off = 0;
@@ -170,7 +88,7 @@ int CLSAGFuzzer::fuzz_clsag(const std::string& s)
   return 0;
 }
 
-int CLSAGFuzzer::fuzz_clsag_deserialize(const std::string& s)
+static int fuzz_clsag_deserialize(const std::string& s)
 {
   // fuzz deserialization
   serialization::parse_binary(s, clsag_s);
@@ -180,35 +98,70 @@ int CLSAGFuzzer::fuzz_clsag_deserialize(const std::string& s)
   return 0;
 }
 
-int CLSAGFuzzer::run(const std::string &filename)
-{
-  std::string s;
+BEGIN_INIT_SIMPLE_FUZZER()
+  message = identity();
 
-  if (!epee::file_io_utils::load_file_to_string(filename, s))
+  const size_t N = 11;
+  const size_t idx = 5;
+
+  for (size_t i = 0; i < N; ++i)
   {
-    std::cout << "Error: failed to load file " << filename << std::endl;
-    return 1;
-  }
+    key sk;
+    ctkey tmp;
 
+    skpkGen(sk, tmp.dest);
+    skpkGen(sk, tmp.mask);
+
+    pubs.push_back(tmp);
+}
+
+  // Set P[idx]
+  skpkGen(p, pubs[idx].dest);
+
+  // Set C[idx]
+  t = skGen();
+  u = skGen();
+  addKeys2(pubs[idx].mask,t,u,H);
+
+  // Set commitment offset
+  t2 = skGen();
+  addKeys2(Cout,t2,u,H);
+
+  // Prepare generation inputs
+  insk.dest = p;
+  insk.mask = t;
+
+  clsag_s = rct::proveRctCLSAGSimple(zero(),pubs,insk,t2,Cout,NULL,NULL,NULL,idx,hw::get_device("default"));
+END_INIT_SIMPLE_FUZZER()
+
+BEGIN_SIMPLE_FUZZER()
+  std::string s((const char*)buf, len);
   fuzz_message(s);
   fuzz_cout(s);
   fuzz_clsag(s);
   fuzz_clsag_deserialize(s);
+END_SIMPLE_FUZZER()
+
+
+/*
+static int generate_seed_corpus(const std::string& path)
+{
+  try
+  {
+    std::cout << "Generating corpus seed: " << path << std::endl;
+    std::string clsag_out;
+    serialization::dump_binary(clsag_s, clsag_out);
+    std::string corpus_path(path);
+
+    // write valid CLSAG
+    epee::file_io_utils::save_string_to_file(corpus_path, clsag_out);
+  }
+  catch (const std::exception &e)
+  {
+    std::cerr << "Error on CLSAGFuzzer::generate_seed_corpus: " << e.what() << std::endl;
+    return 1;
+  }
 
   return 0;
 }
-
-int main(int argc, const char **argv)
-{
-  TRY_ENTRY();
-  CLSAGFuzzer fuzzer;
-
-  if (argc >= 3 && std::string(argv[1]) == std::string("--gen-corpus"))
-  {
-    fuzzer.generate_seed_corpus(std::string(argv[2]) + "/clsag_seed");
-    return 0;
-  }
-
-  return run_fuzzer(argc, argv, fuzzer);
-  CATCH_ENTRY_L0("main", 1);
-}
+*/

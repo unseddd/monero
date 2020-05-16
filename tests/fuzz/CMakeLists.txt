@@ -203,7 +203,6 @@ set_property(TARGET bulletproof_fuzz_tests
 add_executable(clsag_fuzz_tests clsag.cpp fuzzer.cpp)
 target_link_libraries(clsag_fuzz_tests
   PRIVATE
-    wallet
     cryptonote_core
     device
     serialization
