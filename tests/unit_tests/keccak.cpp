@@ -54,7 +54,7 @@ extern "C" {
   keccak_finish(&ctx, md1); \
   ASSERT_EQ(memcmp(md0, md1, 32), 0);
 
-TEST(keccak, )
+TEST(keccak, 0)
 {
 }
 

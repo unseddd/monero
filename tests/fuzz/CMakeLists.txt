@@ -204,10 +204,8 @@ add_executable(clsag_fuzz_tests clsag.cpp fuzzer.cpp)
 target_link_libraries(clsag_fuzz_tests
   PRIVATE
     cryptonote_core
-    device
     serialization
-    ${CMAKE_THREAD_LIBS_INIT}
-    ${EXTRA_LIBRARIES})
+    ${CMAKE_THREAD_LIBS_INIT})
 set_property(TARGET clsag_fuzz_tests
   PROPERTY
     FOLDER "tests")
